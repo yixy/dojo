@@ -2,6 +2,7 @@ package me.youzhilane.dojo;
 
 import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.NamingStrategy;
+import net.bytebuddy.agent.builder.AgentBuilder;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.implementation.FieldAccessor;
@@ -50,7 +51,7 @@ public class BytebuddyTest {
     }
 
     @Test
-    public void testInterceptMethod() throws  InstantiationException, IllegalAccessException, NoSuchMethodException, InvocationTargetException {
+    public void testIntercept() throws  InstantiationException, IllegalAccessException, NoSuchMethodException, InvocationTargetException {
         NamingStrategy.SuffixingRandom suffixingRandom = new NamingStrategy.SuffixingRandom("youzhilane-demo");
         Class<?> dynamicType = new ByteBuddy()
                 //define class name strategy
@@ -116,5 +117,14 @@ public class BytebuddyTest {
 
         System.out.println(sayMyName.invoke(obj,"Mr.White"));
         System.out.println("the end.....");
+    }
+
+    @Test
+    public void testAgentBuilder(){
+        NamingStrategy.SuffixingRandom suffixingRandom = new NamingStrategy.SuffixingRandom("youzhilane-demo");
+        ByteBuddy byteBuddy = new ByteBuddy().with(suffixingRandom);
+        AgentBuilder agentBuilxder = new AgentBuilder.Default(byteBuddy).ignore(
+                nameStartsWith("net.bytebuddy.")
+        );
     }
 }
