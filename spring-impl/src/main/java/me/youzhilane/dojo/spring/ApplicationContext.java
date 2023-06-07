@@ -2,19 +2,22 @@ package me.youzhilane.dojo.spring;
 
 import java.io.File;
 import java.io.IOException;
-import java.lang.annotation.Annotation;
+import java.lang.reflect.InvocationTargetException;
 import java.net.JarURLConnection;
 import java.net.URL;
 import java.util.Enumeration;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
 public class ApplicationContext {
     private Class configClass;
+    private ConcurrentHashMap<String,BeanDefinition> beanDefinitionMap =new ConcurrentHashMap<>();
+    private ConcurrentHashMap<String,Object> singletonObjects =new ConcurrentHashMap<>();
     public ApplicationContext(Class appConfigClass) {
         this.configClass=appConfigClass;
 
-        //scan
+        //scan package and create beanDefinition
         if (configClass.isAnnotationPresent(ComponentScan.class)) {
             ComponentScan componentScanAnotation = (ComponentScan) configClass.getAnnotation(ComponentScan.class);
             String path = componentScanAnotation.value(); // me.youzhilane.service
@@ -33,7 +36,7 @@ public class ApplicationContext {
                             String className = fileName.substring(
                                     fileName.indexOf("me/youzhilane/dojo"),
                                     fileName.indexOf(".class"));
-                            setBean(className,classLoader);
+                            setBeanDefinition(className,classLoader);
                         }
                     }
                 }
@@ -46,18 +49,26 @@ public class ApplicationContext {
                         String className = entry.getName();
                         if(className.startsWith(path)&&className.endsWith(".class")){
                             className=className.substring(0,className.indexOf(".class"));
-                            setBean(className,classLoader);
+                            setBeanDefinition(className,classLoader);
                         }
                     }
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
+            }
+        }
 
+        //create singleton beans
+        for (String beanName : beanDefinitionMap.keySet()) {
+            BeanDefinition beanDefinition = beanDefinitionMap.get(beanName);
+            if ("singleton".equals(beanDefinition.getScope())) {
+                Object bean = createBean(beanName, beanDefinition);
+                singletonObjects.put(beanName,bean);
             }
         }
     }
 
-    private void setBean(String className, ClassLoader classLoader){
+    private void setBeanDefinition(String className, ClassLoader classLoader){
         className=className.replace("/",".");
         Class<?> clazz = null;
         try {
@@ -66,12 +77,53 @@ public class ApplicationContext {
             throw new RuntimeException(e);
         }
         if (clazz.isAnnotationPresent(Component.class)) {
-            //Bean
+            //new BeanDefinition
             System.out.println(className);
+            Component componentAnnotation = clazz.getAnnotation(Component.class);
+            BeanDefinition beanDefinition = new BeanDefinition();
+            beanDefinition.setType(clazz);
+            if (clazz.isAnnotationPresent(Scope.class)) {
+                Scope scopAnnotation = clazz.getAnnotation(Scope.class);
+                beanDefinition.setScope(scopAnnotation.value());
+            }else {
+                beanDefinition.setScope("singleton");
+            }
+            beanDefinitionMap.put(componentAnnotation.value(),beanDefinition);
         }
     }
 
+    private Object createBean(String beanName,BeanDefinition beanDefinition){
+        Class clazz = beanDefinition.getType();
+        Object obj;
+
+        try {
+            obj = clazz.getConstructor().newInstance();
+        } catch (InstantiationException e) {
+            throw new RuntimeException(e);
+        } catch (IllegalAccessException e) {
+            throw new RuntimeException(e);
+        } catch (InvocationTargetException e) {
+            throw new RuntimeException(e);
+        } catch (NoSuchMethodException e) {
+            throw new RuntimeException(e);
+        }
+        return obj;
+    }
     public Object getBean(String beanName){
-        return null;
+        BeanDefinition beanDefinition = beanDefinitionMap.get(beanName);
+        if (beanDefinition == null) {
+            throw new NullPointerException();
+        }else {
+            if ("singleton".equals(beanDefinition.getScope())) {
+                Object bean = singletonObjects.get(beanName);
+                if (bean == null) {
+                    bean = createBean(beanName, beanDefinition);
+                    singletonObjects.put(beanName,bean);
+                }
+                return bean;
+            }else {
+                return createBean(beanName,beanDefinition);
+            }
+        }
     }
 }
