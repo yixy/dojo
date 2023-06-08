@@ -1,4 +1,4 @@
-package me.youzhilane.dojo.spring;
+package me.youzhilane.dojo.spring.annotation;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

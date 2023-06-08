@@ -1,10 +1,18 @@
 package me.youzhilane.dojo.spring;
 
+import me.youzhilane.dojo.spring.annotation.Autowired;
+import me.youzhilane.dojo.spring.annotation.Component;
+import me.youzhilane.dojo.spring.annotation.ComponentScan;
+import me.youzhilane.dojo.spring.annotation.Scope;
+
+import java.beans.Introspector;
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.net.JarURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.jar.JarEntry;
@@ -14,6 +22,7 @@ public class ApplicationContext {
     private Class configClass;
     private ConcurrentHashMap<String,BeanDefinition> beanDefinitionMap =new ConcurrentHashMap<>();
     private ConcurrentHashMap<String,Object> singletonObjects =new ConcurrentHashMap<>();
+    private ArrayList<BeanPostProcessor> beanPostProcessors=new ArrayList<>();
     public ApplicationContext(Class appConfigClass) {
         this.configClass=appConfigClass;
 
@@ -73,22 +82,38 @@ public class ApplicationContext {
         Class<?> clazz = null;
         try {
             clazz = classLoader.loadClass(className);
+
+            if (clazz.isAnnotationPresent(Component.class)) {
+                //new BeanDefinition
+                System.out.println("setBeanDefinition: "+className);
+                //get custom beanName
+                Component componentAnnotation = clazz.getAnnotation(Component.class);
+                String beanName = componentAnnotation.value();
+                if("".equals(beanName)){
+                    //default beanName, lower case
+                    beanName= Introspector.decapitalize(clazz.getSimpleName());
+                }
+                BeanDefinition beanDefinition = new BeanDefinition();
+                beanDefinition.setType(clazz);
+                if (clazz.isAnnotationPresent(Scope.class)) {
+                    Scope scopAnnotation = clazz.getAnnotation(Scope.class);
+                    beanDefinition.setScope(scopAnnotation.value());
+                }else {
+                    beanDefinition.setScope("singleton");
+                }
+                beanDefinitionMap.put(beanName,beanDefinition);
+
+                if (BeanPostProcessor.class.isAssignableFrom(clazz)) {
+                    BeanPostProcessor instance = (BeanPostProcessor) clazz.newInstance();
+                    beanPostProcessors.add(instance);
+                }
+            }
         } catch (ClassNotFoundException e) {
             throw new RuntimeException(e);
-        }
-        if (clazz.isAnnotationPresent(Component.class)) {
-            //new BeanDefinition
-            System.out.println(className);
-            Component componentAnnotation = clazz.getAnnotation(Component.class);
-            BeanDefinition beanDefinition = new BeanDefinition();
-            beanDefinition.setType(clazz);
-            if (clazz.isAnnotationPresent(Scope.class)) {
-                Scope scopAnnotation = clazz.getAnnotation(Scope.class);
-                beanDefinition.setScope(scopAnnotation.value());
-            }else {
-                beanDefinition.setScope("singleton");
-            }
-            beanDefinitionMap.put(componentAnnotation.value(),beanDefinition);
+        } catch (InstantiationException e) {
+            throw new RuntimeException(e);
+        } catch (IllegalAccessException e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -97,7 +122,48 @@ public class ApplicationContext {
         Object obj;
 
         try {
+            //TODO:推断constructor
+            //多个构造方法，有无参数的就用，没有就报错。可以通过增加Autowired注解告诉spring使用哪个构造方法
+            //一个构造方法，就用这个构造方法
+            //
+            //构造方法的入参，先byType,再byName,找到唯一的一个。没有就新建。
             obj = clazz.getConstructor().newInstance();
+
+            //Dependency Injection
+            //
+            //找属性赋值
+            //先byType,再byName
+            for (Field f : clazz.getDeclaredFields()) {
+                if (f.isAnnotationPresent(Autowired.class)) {
+                    f.setAccessible(true); // for reflect
+                    f.set(obj,getBean(f.getName()));
+                }
+            }
+
+            //beanName callback
+            if (obj instanceof BeanNameAware) {
+                ((BeanNameAware) obj).setBeanName(beanName);
+            }
+
+            //bean poster process: before init
+            //TODO:@PostConstruct
+            for (BeanPostProcessor beanPostProcessor : beanPostProcessors) {
+                beanPostProcessor.postProcessBeforeInitialization(beanName,obj);
+            }
+
+            //BeanInitialization: init
+            //TODO:afterPropertiesSet
+            if (obj instanceof BeanInitialization) {
+                ((BeanInitialization) obj).afterPropertiesSet();
+            }
+
+            //bean poster process: after init
+            //TODO:AOP
+            for (BeanPostProcessor beanPostProcessor : beanPostProcessors) {
+                beanPostProcessor.postProcessAfterInitialization(beanName,obj);
+            }
+
+
         } catch (InstantiationException e) {
             throw new RuntimeException(e);
         } catch (IllegalAccessException e) {
