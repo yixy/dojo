@@ -8,6 +8,7 @@ import me.youzhilane.dojo.spring.annotation.Scope;
 import java.beans.Introspector;
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.net.JarURLConnection;
@@ -20,9 +21,9 @@ import java.util.jar.JarFile;
 
 public class ApplicationContext {
     private Class configClass;
-    private ConcurrentHashMap<String,BeanDefinition> beanDefinitionMap =new ConcurrentHashMap<>();
-    private ConcurrentHashMap<String,Object> singletonObjects =new ConcurrentHashMap<>();
-    private ArrayList<BeanPostProcessor> beanPostProcessors=new ArrayList<>();
+    private final ConcurrentHashMap<String,BeanDefinition> beanDefinitionMap =new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String,Object> singletonObjects =new ConcurrentHashMap<>();
+    private final ArrayList<BeanPostProcessor> beanPostProcessors=new ArrayList<>();
     public ApplicationContext(Class appConfigClass) {
         this.configClass=appConfigClass;
 
@@ -33,19 +34,21 @@ public class ApplicationContext {
             path=path.replace(".","/");
             ClassLoader classLoader = ApplicationContext.class.getClassLoader();
             URL resource = classLoader.getResource(path);
-            String protocol = resource.getProtocol();
+            String protocol = resource != null ? resource.getProtocol() : null;
             if ("file".equals(protocol)) {// for class file in linux/mac
                 File file = new File(resource.getFile());
                 if (file.isDirectory()) {// /classpath/me/youzhilane/service
                     File[] files = file.listFiles();
-                    for (File f : files) {
-                        String fileName = f.getAbsolutePath();
-                        if (fileName.endsWith(".class")) {
-                            // me/youzhilane/service/UserService
-                            String className = fileName.substring(
-                                    fileName.indexOf("me/youzhilane/dojo"),
-                                    fileName.indexOf(".class"));
-                            setBeanDefinition(className,classLoader);
+                    if (files != null) {
+                        for (File f : files) {
+                            String fileName = f.getAbsolutePath();
+                            if (fileName.endsWith(".class")) {
+                                // me/youzhilane/service/UserService
+                                String className = fileName.substring(
+                                        fileName.indexOf("me/youzhilane/dojo"),
+                                        fileName.indexOf(".class"));
+                                setBeanDefinition(className,classLoader);
+                            }
                         }
                     }
                 }
@@ -104,15 +107,13 @@ public class ApplicationContext {
                 beanDefinitionMap.put(beanName,beanDefinition);
 
                 if (BeanPostProcessor.class.isAssignableFrom(clazz)) {
-                    BeanPostProcessor instance = (BeanPostProcessor) clazz.newInstance();
+                    Constructor<?> declaredConstructor = clazz.getDeclaredConstructor();
+                    BeanPostProcessor instance = (BeanPostProcessor) declaredConstructor.newInstance();
                     beanPostProcessors.add(instance);
                 }
             }
-        } catch (ClassNotFoundException e) {
-            throw new RuntimeException(e);
-        } catch (InstantiationException e) {
-            throw new RuntimeException(e);
-        } catch (IllegalAccessException e) {
+        } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | NoSuchMethodException |
+                 InvocationTargetException e) {
             throw new RuntimeException(e);
         }
     }
@@ -122,17 +123,19 @@ public class ApplicationContext {
         Object obj;
 
         try {
-            //TODO:推断constructor
-            //多个构造方法，有无参数的就用，没有就报错。可以通过增加Autowired注解告诉spring使用哪个构造方法
-            //一个构造方法，就用这个构造方法
+            //1. 推断constructor
+            //  有多个构造方法，有无参数的就用，没有就报错。可以通过增加Autowired注解告诉spring使用哪个构造方法
+            //  只有一个构造方法，就用这个构造方法
             //
-            //构造方法的入参，先byType,再byName,找到唯一的一个。没有就新建。
+            //2. 推断构造方法的入参，先byType,再byName,找到唯一的一个bean。没有就新建。
+            //  可以通过@Qualifier指定bean,或者通过@Value来设定定值（因为 Spring 提供了内置的类型转换器，可以将字符串转换为相应的 Java 类型。）
+            //
+            //The following code is just simplified!
             obj = clazz.getConstructor().newInstance();
 
-            //Dependency Injection
+            //Dependency Injection：先byType,再byName
             //
-            //找属性赋值
-            //先byType,再byName
+            //The following code is just simplified!
             for (Field f : clazz.getDeclaredFields()) {
                 if (f.isAnnotationPresent(Autowired.class)) {
                     f.setAccessible(true); // for reflect
@@ -146,31 +149,22 @@ public class ApplicationContext {
             }
 
             //bean poster process: before init
-            //TODO:@PostConstruct
             for (BeanPostProcessor beanPostProcessor : beanPostProcessors) {
                 beanPostProcessor.postProcessBeforeInitialization(beanName,obj);
             }
 
             //BeanInitialization: init
-            //TODO:afterPropertiesSet
             if (obj instanceof BeanInitialization) {
                 ((BeanInitialization) obj).afterPropertiesSet();
             }
 
             //bean poster process: after init
-            //TODO:AOP
             for (BeanPostProcessor beanPostProcessor : beanPostProcessors) {
                 beanPostProcessor.postProcessAfterInitialization(beanName,obj);
             }
 
 
-        } catch (InstantiationException e) {
-            throw new RuntimeException(e);
-        } catch (IllegalAccessException e) {
-            throw new RuntimeException(e);
-        } catch (InvocationTargetException e) {
-            throw new RuntimeException(e);
-        } catch (NoSuchMethodException e) {
+        } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
             throw new RuntimeException(e);
         }
         return obj;
