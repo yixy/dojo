@@ -10,19 +10,21 @@ import org.springframework.stereotype.Component;
 @Component
 public class MyBeanPostProcessor implements BeanPostProcessor, InstantiationAwareBeanPostProcessor {
     //1. 在 Bean 实例化前执行的回调方法
-    public Object postProcessBeforeInitialization(Object bean, String beanName) {
-        if (bean instanceof UserService) {
-            System.out.println(beanName+": BeanPostProcessor.postProcessBeforeInitialization");
+    @Override
+    public Object postProcessBeforeInstantiation(Class<?> beanClass, String beanName) throws BeansException {
+        if ("userService".equals(beanName)) {
+            System.out.println(beanName + ": InstantiationAwareBeanPostProcessor.postProcessBeforeInstantiation");
         }
-        return bean;
+        return null;
     }
 
     // 3. 在 Bean 实例化后执行的回调方法，可在这里对已经实例化的对象进行一些"梳妆打扮"；
-    public Object postProcessAfterInitialization(Object bean, String beanName) {
+    @Override
+    public boolean postProcessAfterInstantiation(Object bean, String beanName) throws BeansException {
         if (bean instanceof UserService) {
-            System.out.println(beanName + ": BeanPostProcessor.postProcessAfterInitialization");
+            System.out.println(beanName + ": InstantiationAwareBeanPostProcessor.postProcessAfterInstantiation");
         }
-        return bean;
+        return true;
     }
 
     //4. 在bean实例化后，属性注入前执行，它可以对bean属性进行修改或者替换。
@@ -45,21 +47,19 @@ public class MyBeanPostProcessor implements BeanPostProcessor, InstantiationAwar
     }
 
     // 8. 在 Bean 初始化前执行的回调方法
-    @Override
-    public Object postProcessBeforeInstantiation(Class<?> beanClass, String beanName) throws BeansException {
-        if ("userService".equals(beanName)) {
-            System.out.println(beanName + ": InstantiationAwareBeanPostProcessor.postProcessBeforeInstantiation");
+    public Object postProcessBeforeInitialization(Object bean, String beanName) {
+        if (bean instanceof UserService) {
+            System.out.println(beanName+": BeanPostProcessor.postProcessBeforeInitialization");
         }
-        return null;
+        return bean;
     }
 
     // 11. 在 Bean 初始化后执行的回调方法
-    @Override
-    public boolean postProcessAfterInstantiation(Object bean, String beanName) throws BeansException {
+    public Object postProcessAfterInitialization(Object bean, String beanName) {
         if (bean instanceof UserService) {
-            System.out.println(beanName + ": InstantiationAwareBeanPostProcessor.postProcessAfterInstantiation");
+            System.out.println(beanName + ": BeanPostProcessor.postProcessAfterInitialization");
         }
-        return true;
+        return bean;
     }
 
 
