@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 
 @Component("userService")
 //@Scope("prototype")
-public class UserService implements BeanNameAware, InitializingBean, BeanFactoryAware, DisposableBean {
+public class UserService implements BeanNameAware, InitializingBean, BeanFactoryAware, DisposableBean,Test {
     @Autowired
     public UserInfo userInfo;
     private String beanName;
@@ -33,6 +33,7 @@ public class UserService implements BeanNameAware, InitializingBean, BeanFactory
         System.out.println(getClass().getSimpleName()+"[getClass().getSimpleName]: constructor");
     }
 
+    @Override
     public void test(){
         System.out.println(this.userInfo);
     }

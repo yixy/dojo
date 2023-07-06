@@ -4,13 +4,19 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.EnableAspectJAutoProxy;
 
 @SpringBootApplication
 @EnableAutoConfiguration
+//@EnableAspectJAutoProxy(proxyTargetClass = false) springboot需要显示在配置文件中配置才生效
+@EnableAspectJAutoProxy
+@Configuration
 public class App {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
         ApplicationContext context = SpringApplication.run(App.class, args);
         UserService bean = (UserService) context.getBean("userService");
+        //Thread.sleep(1000000);
         bean.test();
     }
 
